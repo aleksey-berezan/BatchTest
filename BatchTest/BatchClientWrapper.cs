@@ -59,56 +59,69 @@ namespace BatchTest
             {
                 if (IsStopped)
                     return;
-                var requests = new List<RequestInfo>();
 
-                while (_queue.IsEmpty)
-                {
-                    if (IsStopped)
-                        return;
+                var requests = AccumulateRequests(last);
+                if (requests == null)
+                    return;
 
-                    Thread.Yield();
-                }
-
-                while (true)
-                {
-                    if (IsStopped)
-                        return;
-
-                    RequestInfo r;
-                    if (_queue.TryDequeue(out r))
-                    {
-                        requests.Add(r);
-                    }
-
-                    if (requests.Count >= MaxBatchSize)
-                    {
-                        Trace.WriteLine($"Batch is full: {requests.Count}");
-                        break;
-                    }
-
-                    var delay = DateTime.Now - last;
-                    if (delay >= MaxDelay)
-                    {
-                        Trace.WriteLine($"No more time to wait: {delay.Milliseconds} ms");
-                        break;
-                    }
-
-                    if (_queue.IsEmpty)
-                        Thread.Yield();
-                }
-
-                if (requests.Count == 0)
-                {
-                    last = DateTime.Now;
-                    Thread.Yield();
-                    continue;
-                }
-
+                last = DateTime.Now;
                 Dictionary<string, RequestInfo> dictionary = requests.ToDictionary(r => r.Request);
                 Task.Run(() => SendBatchRequest(requests))
                     .ContinueWith(t => ProcessBatchResult(dictionary, t.Result));
-                last = DateTime.Now;
             }
+        }
+
+        private List<RequestInfo> AccumulateRequests(DateTime last)
+        {
+            var requests = new List<RequestInfo>();
+
+            while (_queue.IsEmpty)
+            {
+                if (IsStopped)
+                    return null;
+                Trace.WriteLine("queue is empty");
+                Thread.Yield();
+            }
+
+            while (true)
+            {
+                Trace.WriteLine($"loop start with {requests.Count} items in queue");
+                if (IsStopped)
+                    return null;
+
+                RequestInfo r;
+                if (_queue.TryDequeue(out r))
+                {
+                    requests.Add(r);
+                }
+
+                if (requests.Count >= MaxBatchSize)
+                {
+                    Trace.WriteLine($"Batch is full: {requests.Count}");
+                    break;
+                }
+
+                var delay = DateTime.Now - last;
+                if (delay >= MaxDelay)
+                {
+                    if (requests.Count > 0)
+                    {
+                        Trace.WriteLine($"No more time to wait({delay.Milliseconds} ms elapsed) but we have {requests.Count} requests");
+                        return requests;
+                    }
+
+                    Trace.WriteLine($"No more time to wait({delay.Milliseconds} ms elapsed) and requests list is empty, reseting the timer");
+                    last = DateTime.Now;
+                    Thread.Yield();
+
+                    break;
+                }
+
+                if (_queue.IsEmpty)
+                    Thread.Yield();
+            }
+
+            return requests;
         }
 
         private Dictionary<string, string> SendBatchRequest(List<RequestInfo> requests)

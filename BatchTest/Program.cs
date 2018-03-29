@@ -24,6 +24,13 @@ namespace BatchTest
                 Task.WaitAll(tasks.ToArray());
 
                 Console.WriteLine($"Elapsed: {ts.Elapsed}");
+                Console.ReadLine();
+                tasks.Add(Task.Factory.StartNew(() => clientWrapper.Send("1"), TaskCreationOptions.LongRunning));
+                tasks.Add(Task.Factory.StartNew(() => clientWrapper.Send("2"), TaskCreationOptions.LongRunning));
+                tasks.Add(Task.Factory.StartNew(() => clientWrapper.Send("3"), TaskCreationOptions.LongRunning));
+                tasks.Add(Task.Factory.StartNew(() => clientWrapper.Send("4"), TaskCreationOptions.LongRunning));
+                tasks.Add(Task.Factory.StartNew(() => clientWrapper.Send("5"), TaskCreationOptions.LongRunning));
+                Console.ReadLine();
             }
 
             Console.ReadLine();
